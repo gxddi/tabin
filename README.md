@@ -4,10 +4,10 @@ Inline suggestions and native code reviews in one Codex or Claude Code chat per 
 
 ## Setup
 
-Add this to your Neovim configuration. The local Git source works with Neovim's built-in package manager.
+Install with Neovim's built-in package manager and add the setup below to your configuration.
 
 ```lua
-vim.pack.add({ "file://" .. vim.fn.expand("~/Development/projects/tabin.nvim") })
+vim.pack.add({ { src = "https://github.com/gxddi/tabin", name = "tabin.nvim" } })
 
 require("tabin").setup({
   provider = "codex", -- or "claude" for Claude Code
@@ -15,20 +15,11 @@ require("tabin").setup({
     codex = {}, -- for example { "--device-auth" }
     claude = {}, -- for example { "--sso" }
   },
-  prompts = {
-    complete = {
-      codex = "Complete the code near the cursor. Follow existing project style.",
-      claude = "Complete the code near the cursor. Follow existing project style.",
-    },
-    review = {
-      codex = "Review the current Git working tree. Run relevant tests. "
-        .. "List findings by severity with path:line, impact, and a suggested fix.",
-      claude = "Review the current Git working tree. Run relevant tests. "
-        .. "List findings by severity with path:line, impact, and a suggested fix.",
-    },
-  },
+  prompt_dir = vim.fn.stdpath("config") .. "/tabin", -- optional
 })
 ```
+
+Tabin creates `complete.md` and `review.md` under `prompt_dir` if they are missing. The default directory is `~/.config/nvim/tabin` on Linux. Edit the Markdown files to change the prompts. Each request reads the current file.
 
 ## Use
 
@@ -49,6 +40,6 @@ The first turn creates a native chat. The worktree's `.tabin` contains one line,
 
 The bottom-right status line uses [Avante’s generating spinner](https://github.com/avante-corp/avante.nvim/blob/main/lua/avante/config.lua) while a turn runs and shows the used percentages for the five-hour and weekly windows. A dash means the client hasn't supplied a current value. Codex refreshes on project entry or focus, at most once every five minutes. `:TabinUsage` requests an immediate refresh. Claude Code supplies percentages during turns on versions and accounts that expose them. For a custom status line, set `statusline = false` and add `require("tabin").status` as a component.
 
-Alt+R uses [Codex's inline reviewer](https://learn.chatgpt.com/docs/app-server#review) or [Claude Code's bundled `/code-review` skill](https://code.claude.com/docs/en/skills). Put the desired review scope and format in `prompts.review`. Codex reviews can run tests with the default `codex.review_sandbox = "workspace-write"`. Claude Code uses the client's permissions. Set `claude.review_args` to pass additional arguments such as `{ "--allowedTools", "Bash(npm test)" }` in projects where that is appropriate.
+Alt+R reviews a snapshot of the open buffer, including unsaved edits. Edit `review.md` to set review criteria and output format. Codex uses its [inline reviewer](https://learn.chatgpt.com/docs/app-server#review), and Claude Code reviews the snapshot in the existing chat with its usual tools. Codex can run tests with the default `codex.review_sandbox = "workspace-write"`. Claude Code uses the client's permissions. Use `claude.review_args` to pass additional arguments such as `{ "--allowedTools", "Bash(npm test)" }`.
 
 Other options include `keys` (set an action to `false` to disable its mapping), `context_lines`, `timeout` in milliseconds, and `spinner`. Completion sends the nearby buffer context and its cursor position to the provider. Reviews use the native project's working directory and tools. If an editor crashes and leaves a chat locked, the reported lock directory can be removed once that chat is no longer running.

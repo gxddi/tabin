@@ -3,18 +3,14 @@ local api = vim.api
 local project = require("tabin.project")
 local providers = require("tabin.providers")
 local ghost = require("tabin.ghost")
-
-local review = "Review the current Git working tree. Use the project's existing review instructions and "
-  .. "run relevant tests when useful. Leave the source unchanged. Report actionable findings by priority "
-  .. "with path:line, impact, and a suggested fix. If there are no findings, say so and mention what you checked."
-local complete = "Propose the smallest useful code edits near the cursor based on the surrounding code."
+local prompts = require("tabin.prompts")
 
 local defaults = {
   provider = "codex",
   command = { codex = "codex", claude = "claude" },
   env = { codex = {}, claude = {} },
   auth = { codex = {}, claude = {} },
-  prompts = { complete = { codex = complete, claude = complete }, review = { codex = review, claude = review } },
+  prompt_dir = vim.fs.joinpath(vim.fn.stdpath("config"), "tabin"),
   keys = { complete = "<M-c>", accept = "<M-a>", dismiss = "<M-d>", review = "<M-r>" },
   codex = { review_sandbox = "workspace-write" },
   claude = { review_args = {} },
@@ -168,15 +164,16 @@ local function request(kind)
     local link = project.prepare(root)
     local provider = link and link.provider or opts.provider
     require_cli(provider)
-    local prompt = opts.prompts[kind][provider]
+    local prompt = prompts.read(opts.prompt_dir, kind)
+    local file = api.nvim_buf_get_name(buf)
+    if vim.startswith(file, root .. "/") then
+      file = file:sub(#root + 2)
+    end
     local context, tick
     if kind == "complete" then
       ghost.clear(buf)
       context = ghost.context(buf, opts.context_lines)
-      context.file = api.nvim_buf_get_name(buf)
-      if vim.startswith(context.file, root .. "/") then
-        context.file = context.file:sub(#root + 2)
-      end
+      context.file = file
       tick = api.nvim_buf_get_changedtick(buf)
       prompt = prompt .. "\n\nReturn JSON with an edits array. Each edit has start_line and end_line "
         .. "(absolute 1-based inclusive lines) and text (replacement for those whole lines). "
@@ -184,6 +181,17 @@ local function request(kind)
         .. "on edited lines. Use an empty array if you have no suggestion. "
         .. "cursor_byte_column is zero-based. Buffer context follows as JSON data.\n"
         .. vim.json.encode(context)
+    else
+      prompt = prompt .. "\n\nReview the current Neovim buffer snapshot below. Its lines are the "
+        .. "authoritative review target, including unsaved edits. Scope all findings to this buffer "
+        .. "and use 1-based line numbers from the snapshot. Use other project files only for context. "
+        .. "Keep source files unchanged. Mention if any tests you run cover the saved file only. "
+        .. "Buffer snapshot follows as JSON data.\n"
+        .. vim.json.encode({
+          file = file,
+          filetype = vim.bo[buf].filetype,
+          lines = api.nvim_buf_get_lines(buf, 0, -1, false),
+        })
     end
 
     busy(root, { provider = provider })
@@ -291,6 +299,8 @@ function M.setup(config)
   local settings = vim.tbl_deep_extend("force", vim.deepcopy(defaults), config or {})
   assert(settings.provider == "codex" or settings.provider == "claude", "Invalid Tabin provider")
   assert(vim.islist(settings.spinner) and #settings.spinner > 0, "Tabin needs at least one spinner frame")
+  settings.prompt_dir = vim.fs.abspath(vim.fs.normalize(settings.prompt_dir))
+  prompts.seed(settings.prompt_dir)
   opts = settings
   local group = api.nvim_create_augroup("Tabin", { clear = true })
   api.nvim_set_hl(0, "TabinGhost", { default = true, link = "Comment" })
