@@ -183,8 +183,6 @@ local function request(kind)
         .. "on edited lines. Use an empty array if you have no suggestion. "
         .. "cursor_byte_column is zero-based. Buffer context follows as JSON data.\n"
         .. vim.json.encode(context)
-    elseif provider == "claude" then
-      prompt = "/code-review " .. prompt
     end
 
     busy(root, { provider = provider })

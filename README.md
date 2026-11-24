@@ -1,6 +1,6 @@
 # slimchat.nvim
 
-Inline suggestions and native code reviews in one Codex or Claude Code chat per Git worktree. The plugin needs Neovim 0.12, Git, and the command-line client for your provider.
+Inline suggestions and native code reviews in one Codex or Claude Code chat per Git worktree. The plugin needs Neovim 0.12, Git, and a current Codex or Claude Code command-line client.
 
 ## Setup
 

@@ -202,7 +202,12 @@ local function claude_turn(root, link, kind, prompt, schema, opts, report, remem
       "--json-schema", vim.json.encode(schema),
     })
   else
+    vim.list_extend(args, {
+      "--system-prompt-snapshot", "off", "--append-system-prompt",
+      "For this code review, apply the following project instructions:\n" .. prompt,
+    })
     vim.list_extend(args, opts.claude.review_args)
+    prompt = "/code-review"
   end
   vim.system(args, {
     cwd = root, env = opts.env.claude, stdin = prompt, text = true, timeout = opts.timeout,
