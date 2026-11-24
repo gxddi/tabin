@@ -1,7 +1,7 @@
 local M = {}
 
 local function chat_name(root)
-  return vim.fs.basename(root) .. " - completions"
+  return vim.fs.basename(root) .. " - completions and review"
 end
 
 local function decode(line)
