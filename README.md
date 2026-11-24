@@ -1,6 +1,6 @@
 # tabin.nvim
 
-Currently provides on-request suggestions to buffer and native code reviews in one Codex or Claude Code chat per Git worktree.
+Provides on-request completion suggestions across a worktree and native code reviews in one Codex or Claude Code chat per Git worktree.
 
 ## Setup
 
@@ -33,8 +33,8 @@ Run `:TabinLogin` to sign in through the chosen client, or `:TabinLogin claude` 
 ### Bindings
 | Key | Action | Desc |
 | --- | --- | --- |
-| Alt+c | Complete | Request ghost text for the current buffer in insert or normal mode. |
-| Alt+a | Accept | Accept the suggestion under or within one line of the cursor. |
+| Alt+c | Complete | Request ghost text for the task near the cursor in insert or normal mode. |
+| Alt+a | Accept | Accept a suggestion within one line of the cursor. Otherwise, jump to a pending suggestion in this buffer or another file. Press again to accept it. |
 | Alt+d | Dismiss | Dismiss the suggestion under or within one line of the cursor. |
 | Alt+r | Review | Start a native code-review of the current buffer in the same chat. |
 

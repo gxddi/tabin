@@ -2,7 +2,7 @@ local M = {}
 local api = vim.api
 local anchors = api.nvim_create_namespace("tabin-anchors")
 local display = api.nvim_create_namespace("tabin-ghost")
-local suggestions = {}
+local suggestions, batches = {}, {}
 
 M.schema = {
   type = "object",
@@ -14,8 +14,14 @@ M.schema = {
       items = {
         type = "object",
         additionalProperties = false,
-        required = { "start_line", "end_line", "text" },
-        properties = { start_line = { type = "integer" }, end_line = { type = "integer" }, text = { type = "string" } },
+        required = { "file", "start_line", "end_line", "before", "text" },
+        properties = {
+          file = { type = "string" },
+          start_line = { type = "integer" },
+          end_line = { type = "integer" },
+          before = { type = "string" },
+          text = { type = "string" },
+        },
       },
     },
   },
@@ -49,10 +55,15 @@ function M.context(buf, radius)
   }
 end
 
-function M.clear(buf)
-  suggestions[buf] = nil
-  api.nvim_buf_clear_namespace(buf, anchors, 0, -1)
-  api.nvim_buf_clear_namespace(buf, display, 0, -1)
+function M.clear(root)
+  for _, buf in ipairs(batches[root] or {}) do
+    suggestions[buf] = nil
+    if api.nvim_buf_is_loaded(buf) then
+      api.nvim_buf_clear_namespace(buf, anchors, 0, -1)
+      api.nvim_buf_clear_namespace(buf, display, 0, -1)
+    end
+  end
+  batches[root] = nil
 end
 
 function M.forget(buf)
@@ -126,6 +137,10 @@ function M.refresh(buf)
   if not edits then
     return
   end
+  if not api.nvim_buf_is_loaded(buf) then
+    M.forget(buf)
+    return
+  end
   api.nvim_buf_clear_namespace(buf, display, 0, -1)
   for index = #edits, 1, -1 do
     local edit = edits[index]
@@ -154,7 +169,39 @@ function M.refresh(buf)
   end
 end
 
-function M.show(buf, context, answer)
+local function target_buffer(root, origin, origin_file, file)
+  if type(file) ~= "string" or file == "" or file:match("^[/~]") or file:match("^%a:")
+      or file:find("[\\%z\r\n]") then
+    return
+  end
+  for component in file:gmatch("[^/]+") do
+    if component == "." or component == ".." or component:lower() == ".git" then
+      return
+    end
+  end
+  local path = vim.uv.fs_realpath(vim.fs.joinpath(root, file))
+  if file == origin_file and not path then
+    return origin
+  end
+  if not path or not vim.startswith(path, root .. "/") or path:lower():find("/.git/", 1, true)
+      or vim.fs.root(vim.fs.dirname(path), ".git") ~= root then
+    return
+  end
+  local stat = vim.uv.fs_stat(path)
+  if not stat or stat.type ~= "file" then
+    return
+  end
+  if file == origin_file or path == vim.uv.fs_realpath(api.nvim_buf_get_name(origin)) then
+    return origin
+  end
+  local buf = vim.fn.bufadd(path)
+  vim.fn.bufload(buf)
+  if api.nvim_buf_is_loaded(buf) and vim.bo[buf].buftype == "" then
+    return buf
+  end
+end
+
+function M.show(buf, root, context, answer)
   if type(answer) == "string" then
     local payload = vim.trim(answer)
     payload = payload:match("^```[%w]*%s*([%s%S]-)%s*```$") or payload
@@ -164,68 +211,114 @@ function M.show(buf, context, answer)
   if type(answer) ~= "table" or type(answer.edits) ~= "table" or not vim.islist(answer.edits) then
     return nil, "Provider did not return completion edits"
   end
-  local first = context.first_line
-  local last = first + #context.lines - 1
-  local ranges = {}
+  local buffers, ranges, targets = {}, {}, {}
   for _, edit in ipairs(answer.edits) do
     local start = type(edit) == "table" and edit.start_line
     local stop = type(edit) == "table" and edit.end_line
     if type(start) ~= "number" or type(stop) ~= "number"
-        or start % 1 ~= 0 or stop % 1 ~= 0 or start < first or stop > last or stop < start
-        or type(edit.text) ~= "string" or #edit.text > 24000 or edit.text:find("%z") then
+        or start % 1 ~= 0 or stop % 1 ~= 0 or start < 1 or stop < start
+        or type(edit.before) ~= "string" or type(edit.text) ~= "string"
+        or #edit.before > 24000 or #edit.text > 24000 or edit.text:find("%z") then
       return nil, "Provider returned an invalid edit range"
     end
-    ranges[#ranges + 1] = edit
-  end
-  table.sort(ranges, function(a, b) return a.start_line < b.start_line end)
-  local previous = first - 1
-  for _, edit in ipairs(ranges) do
-    if edit.start_line <= previous then
-      return nil, "Provider returned overlapping edits"
+    local target = targets[edit.file] or target_buffer(root, buf, context.file, edit.file)
+    if not target then
+      return nil, "Provider returned an invalid completion file"
     end
-    previous = edit.end_line
+    targets[edit.file] = target
+    if not ranges[target] then
+      buffers[#buffers + 1] = target
+      ranges[target] = {}
+    end
+    table.insert(ranges[target], edit)
   end
 
-  local edits = {}
-  suggestions[buf] = edits
-  for _, edit in ipairs(ranges) do
-    local before = table.concat(context.lines, "\n", edit.start_line - first + 1, edit.end_line - first + 1)
-    local after = edit.text
-    if before ~= after then
-      local prefix, suffix = narrow(before, after)
-      local row, col = advance(edit.start_line - 1, 0, before:sub(1, prefix))
-      local end_row, end_col = advance(row, col, before:sub(prefix + 1, #before - suffix))
-      local id = api.nvim_buf_set_extmark(buf, anchors, row, col, {
-        end_row = end_row, end_col = end_col, right_gravity = false, end_right_gravity = true,
-        undo_restore = false,
-      })
-      edits[#edits + 1] = {
-        id = id,
-        before = before:sub(prefix + 1, #before - suffix),
-        after = after:sub(prefix + 1, #after - suffix),
-      }
+  for _, target in ipairs(buffers) do
+    table.sort(ranges[target], function(a, b) return a.start_line < b.start_line end)
+    local previous, last = 0, api.nvim_buf_line_count(target)
+    for _, edit in ipairs(ranges[target]) do
+      if edit.start_line <= previous then
+        return nil, "Provider returned overlapping edits"
+      end
+      if edit.end_line > last then
+        return nil, "Provider returned an invalid edit range"
+      end
+      local lines = api.nvim_buf_get_lines(target, edit.start_line - 1, edit.end_line, false)
+      if edit.before ~= table.concat(lines, "\n") then
+        return nil, "Completion text changed in " .. edit.file
+      end
+      previous = edit.end_line
     end
   end
-  M.refresh(buf)
-  return #edits
+
+  M.clear(root)
+  batches[root] = buffers
+  local total = 0
+  for _, target in ipairs(buffers) do
+    local edits = {}
+    suggestions[target] = edits
+    for _, edit in ipairs(ranges[target]) do
+      local before, after = edit.before, edit.text
+      if before ~= after then
+        local prefix, suffix = narrow(before, after)
+        local row, col = advance(edit.start_line - 1, 0, before:sub(1, prefix))
+        local end_row, end_col = advance(row, col, before:sub(prefix + 1, #before - suffix))
+        local id = api.nvim_buf_set_extmark(target, anchors, row, col, {
+          end_row = end_row, end_col = end_col, right_gravity = false, end_right_gravity = true,
+          undo_restore = false,
+        })
+        edits[#edits + 1] = {
+          id = id,
+          before = before:sub(prefix + 1, #before - suffix),
+          after = after:sub(prefix + 1, #after - suffix),
+        }
+      end
+    end
+    M.refresh(target)
+    total = total + #edits
+  end
+  return total
 end
 
-function M.choose(accept)
+local function jump(buf, pos)
+  if buf ~= api.nvim_get_current_buf() then
+    vim.cmd.buffer({ args = { tostring(buf) }, mods = { hide = true } })
+  end
+  api.nvim_win_set_cursor(0, { pos.row + 1, pos.col })
+  vim.cmd.normal({ args = { "zv" }, bang = true })
+end
+
+function M.choose(accept, root)
   local buf = api.nvim_get_current_buf()
   M.refresh(buf)
   local row, col = unpack(api.nvim_win_get_cursor(0))
   row = row - 1
-  local selected, position, distance
+  local selected, position, row_distance, col_distance
   for i, edit in ipairs(suggestions[buf] or {}) do
     local pos = tracked(buf, edit)
     local rows = math.max(pos.row - row, row - pos.end_row, 0)
     local cols = row == pos.row and math.abs(col - pos.col) or 0
-    local score = rows == 0 and cols or math.huge
-    if rows <= 1 and (not selected or score < distance) then
-      selected, position, distance = i, pos, score
+    if not selected or rows < row_distance or (rows == row_distance and cols < col_distance) then
+      selected, position, row_distance, col_distance = i, pos, rows, cols
     end
   end
-  if not selected or (accept and not vim.bo[buf].modifiable) then
+  if not selected or row_distance > 1 then
+    if accept then
+      if position then
+        jump(buf, position)
+      else
+        for _, target in ipairs(batches[root] or {}) do
+          M.refresh(target)
+          if suggestions[target] then
+            jump(target, tracked(target, suggestions[target][1]))
+            break
+          end
+        end
+      end
+    end
+    return
+  end
+  if accept and not vim.bo[buf].modifiable then
     return
   end
   local edit = table.remove(suggestions[buf], selected)

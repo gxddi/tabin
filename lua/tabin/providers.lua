@@ -214,7 +214,7 @@ local function claude_turn(root, link, kind, prompt, schema, opts, report, remem
   end
   if kind == "complete" then
     vim.list_extend(args, {
-      "--tools", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
+      "--tools", "Read,Glob,Grep", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
       "--json-schema", vim.json.encode(schema),
     })
   else

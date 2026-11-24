@@ -171,14 +171,17 @@ local function request(kind)
     end
     local context, tick
     if kind == "complete" then
-      ghost.clear(buf)
+      ghost.clear(root)
       context = ghost.context(buf, opts.context_lines)
       context.file = file
       tick = api.nvim_buf_get_changedtick(buf)
-      prompt = prompt .. "\n\nReturn JSON with an edits array. Each edit has start_line and end_line "
-        .. "(absolute 1-based inclusive lines) and text (replacement for those whole lines). "
-        .. "Restrict edits to the supplied context, keep spans disjoint, and preserve unchanged text "
-        .. "on edited lines. Use an empty array if you have no suggestion. "
+      prompt = prompt .. "\n\nReturn JSON with an edits array. Each edit has a worktree-relative file path (file), "
+        .. "start_line and end_line (1-based inclusive), before (the exact original whole lines joined "
+        .. "with newlines), and text (their replacement). Use the snapshot as authoritative for the "
+        .. "lines it includes. Inspect other lines and existing files in the worktree as needed. "
+        .. "You can propose edits in multiple files when the task requires it. "
+        .. "Propose changes through JSON only. Keep spans disjoint within each file and preserve "
+        .. "unchanged text on edited lines. Use an empty array if you have no suggestion. "
         .. "cursor_byte_column is zero-based. Buffer context follows as JSON data.\n"
         .. vim.json.encode(context)
     else
@@ -226,7 +229,7 @@ local function request(kind)
             notify("Review finished. Open the native chat with :TabinOpen")
           end
         elseif api.nvim_buf_is_loaded(buf) and tick == api.nvim_buf_get_changedtick(buf) then
-          local shown, edit_error = ghost.show(buf, context, answer)
+          local shown, edit_error = ghost.show(buf, root, context, answer)
           if not shown then
             notify(edit_error, vim.log.levels.WARN)
           elseif shown == 0 then
@@ -310,7 +313,7 @@ function M.setup(config)
     group = group,
     callback = function(event) ghost.refresh(event.buf) end,
   })
-  api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+  api.nvim_create_autocmd({ "BufUnload", "BufDelete", "BufWipeout" }, {
     group = group,
     callback = function(event) ghost.forget(event.buf) end,
   })
@@ -333,7 +336,7 @@ function M.setup(config)
   })
   for action, callback in pairs({
     complete = function() request("complete") end,
-    accept = function() ghost.choose(true) end,
+    accept = function() ghost.choose(true, vim.b.tabin_root) end,
     dismiss = function() ghost.choose(false) end,
     review = function() request("review") end,
   }) do
