@@ -242,8 +242,13 @@ function M.resume(link, opts)
     return
   end
   local command = opts.command[link.provider]
-  return link.provider == "codex" and { command, "resume", link.id }
-    or { command, "--resume", link.id }
+  if link.provider == "codex" then
+    if opts.codex.no_daemon then
+      return { command, "resume", "--no-daemon", link.id }
+    end
+    return { command, "resume", link.id }
+  end
+  return { command, "--resume", link.id }
 end
 
 return M

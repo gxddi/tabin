@@ -12,7 +12,7 @@ local defaults = {
   auth = { codex = {}, claude = {} },
   prompt_dir = vim.fs.joinpath(vim.fn.stdpath("config"), "tabin"),
   keys = { complete = "<M-c>", accept = "<M-a>", dismiss = "<M-d>", review = "<M-r>" },
-  codex = { review_sandbox = "workspace-write" },
+  codex = { review_sandbox = "workspace-write", no_daemon = false },
   claude = { review_args = {} },
   context_lines = 30,
   timeout = 600000,

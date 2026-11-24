@@ -20,6 +20,8 @@ require("tabin").setup({
 })
 ```
 
+If your desktop-bundled Codex reports a packaging error on resume, set `codex = { no_daemon = true }`.
+
 ### Requirements
 - Neovim 0.12
 - Codex or Claude Code
