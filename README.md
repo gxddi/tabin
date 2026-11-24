@@ -30,16 +30,16 @@ require("tabin").setup({
 })
 ```
 
-Run `:TabinLogin` to sign in through the chosen client, or `:TabinLogin claude` to sign in to a specific provider. The plugin reuses the client's existing login. Set `command.codex` or `command.claude` to override the executable, and `env.codex` or `env.claude` to pass environment overrides from your Neovim configuration.
-
 ## Use
 
-| Key | Action |
-| --- | --- |
-| Alt+C | Request ghost text for the current buffer in insert or normal mode. |
-| Alt+A | Accept the suggestion under or within one line of the cursor. |
-| Alt+D | Dismiss the suggestion under or within one line of the cursor. |
-| Alt+R | Start a native review of the working tree in the same chat. |
+Run `:TabinLogin` to sign in through the chosen client, or `:TabinLogin claude` to sign in to a specific provider.
+
+| Key | Action | Desc |
+| --- | --- | --- |
+| Alt+c | Complete | Request ghost text for the current buffer in insert or normal mode. |
+| Alt+a | Accept | Accept the suggestion under or within one line of the cursor. |
+| Alt+d | Dismiss | Dismiss the suggestion under or within one line of the cursor. |
+| Alt+r | Review | Start a native code-review of the current buffer in the same chat. |
 
 Ghost text stays when you leave insert mode. Typing a matching prefix consumes that part of the ghost text, and a conflicting change at the suggestion clears it. Each change is accepted independently.
 
