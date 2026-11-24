@@ -1,7 +1,7 @@
 local M = {}
 local api = vim.api
-local anchors = api.nvim_create_namespace("slimchat-anchors")
-local display = api.nvim_create_namespace("slimchat-ghost")
+local anchors = api.nvim_create_namespace("tabin-anchors")
+local display = api.nvim_create_namespace("tabin-ghost")
 local suggestions = {}
 
 M.schema = {
@@ -137,15 +137,15 @@ function M.refresh(buf)
       local lines = vim.split(pos.remaining, "\n", { plain = true })
       local virt_lines = {}
       for i = 2, #lines do
-        virt_lines[#virt_lines + 1] = { { lines[i], "SlimChatGhost" } }
+        virt_lines[#virt_lines + 1] = { { lines[i], "TabinGhost" } }
       end
       api.nvim_buf_set_extmark(buf, display, pos.row, pos.col, {
-        virt_text = { { lines[1], "SlimChatGhost" } },
+        virt_text = { { lines[1], "TabinGhost" } },
         virt_text_pos = "inline",
         virt_lines = virt_lines,
         end_row = pos.end_row,
         end_col = pos.end_col,
-        hl_group = pos.old ~= "" and "SlimChatDelete" or nil,
+        hl_group = pos.old ~= "" and "TabinDelete" or nil,
       })
     end
   end

@@ -1,6 +1,7 @@
 local M = {}
 local uv = vim.uv
-local filename = ".slimchat"
+local filename = ".tabin"
+local legacy_filename = ".slimchat"
 
 local function git(root, ...)
   return vim.system({ "git", "-C", root, ... }, { text = true }):wait()
@@ -21,8 +22,14 @@ function M.valid(provider, id)
 end
 
 function M.read(root)
-  local path = vim.fs.joinpath(root, filename)
+  local name = filename
+  local path = vim.fs.joinpath(root, name)
   local stat = uv.fs_lstat(path)
+  if not stat then
+    name = legacy_filename
+    path = vim.fs.joinpath(root, name)
+    stat = uv.fs_lstat(path)
+  end
   if not stat then
     return nil
   end
@@ -34,11 +41,11 @@ function M.read(root)
   if #lines ~= 1 or not M.valid(provider, id) then
     error("Expected one line in " .. path .. " in provider:session-id format", 0)
   end
-  return { provider = provider, id = id }
+  return { provider = provider, id = id, filename = name }
 end
 
 function M.lock(root)
-  local result = git(root, "rev-parse", "--path-format=absolute", "--git-path", "slimchat.lock")
+  local result = git(root, "rev-parse", "--path-format=absolute", "--git-path", "tabin.lock")
   if result.code ~= 0 then
     error(vim.trim(result.stderr), 0)
   end
@@ -52,12 +59,12 @@ function M.lock(root)
   end
 end
 
-local function ignore(root)
-  local tracked = git(root, "ls-files", "--error-unmatch", "--", filename)
+local function ignore(root, name)
+  local tracked = git(root, "ls-files", "--error-unmatch", "--", name)
   if tracked.code == 0 then
-    error(filename .. " is already tracked by Git", 0)
+    error(name .. " is already tracked by Git", 0)
   end
-  local ignored = git(root, "check-ignore", "-q", "--", filename)
+  local ignored = git(root, "check-ignore", "-q", "--", name)
   if ignored.code == 0 then
     return
   end
@@ -68,18 +75,19 @@ local function ignore(root)
   local path = vim.trim(result.stdout)
   vim.fn.mkdir(vim.fs.dirname(path), "p")
   local file = assert(io.open(path, "a"))
-  local written, err = file:write("\n/" .. filename .. "\n")
+  local written, err = file:write("\n/" .. name .. "\n")
   local closed, close_err = file:close()
   assert(written, err)
   assert(closed, close_err)
-  if git(root, "check-ignore", "-q", "--", filename).code ~= 0 then
-    error("Git did not ignore " .. filename .. ". Check this project's ignore rules.", 0)
+  if git(root, "check-ignore", "-q", "--", name).code ~= 0 then
+    error("Git did not ignore " .. name .. ". Check this project's ignore rules.", 0)
   end
 end
 
 function M.prepare(root)
-  ignore(root)
-  return M.read(root)
+  local link = M.read(root)
+  ignore(root, link and link.filename or filename)
+  return link
 end
 
 function M.write(root, provider, id)

@@ -86,7 +86,7 @@ local function codex(root, opts, timeout, ready, event, done)
   timer:start(timeout, 0, vim.schedule_wrap(function()
     finish("Codex request timed out")
   end))
-  request("initialize", { clientInfo = { name = "slimchat", version = "0.1.0" } }, function()
+  request("initialize", { clientInfo = { name = "tabin", version = "0.1.0" } }, function()
     send({ method = "initialized" })
     if not stopped then
       ready(request, finish)

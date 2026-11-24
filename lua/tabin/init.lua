@@ -1,8 +1,8 @@
 local M = {}
 local api = vim.api
-local project = require("slimchat.project")
-local providers = require("slimchat.providers")
-local ghost = require("slimchat.ghost")
+local project = require("tabin.project")
+local providers = require("tabin.providers")
+local ghost = require("tabin.ghost")
 
 local review = "Review the current Git working tree. Use the project's existing review instructions and "
   .. "run relevant tests when useful. Leave the source unchanged. Report actionable findings by priority "
@@ -20,7 +20,8 @@ local defaults = {
   claude = { review_args = {} },
   context_lines = 30,
   timeout = 600000,
-  spinner = { "*", ".", "·", "✦" },
+  -- Avante's generating animation.
+  spinner = { "·", "✢", "✳", "∗", "✻", "✽" },
   statusline = true,
   open_on_review = true,
 }
@@ -33,7 +34,7 @@ local last_usage, reading_usage = nil, false
 local original_statusline
 
 local function notify(message, level)
-  vim.notify(message, level or vim.log.levels.INFO, { title = "SlimChat" })
+  vim.notify(message, level or vim.log.levels.INFO, { title = "Tabin" })
 end
 
 local function guarded(fn)
@@ -54,7 +55,7 @@ local function busy(root, state)
   if state and not timer then
     frame = 1
     timer = vim.uv.new_timer()
-    timer:start(120, 120, vim.schedule_wrap(function()
+    timer:start(160, 160, vim.schedule_wrap(function()
       frame = frame % #opts.spinner + 1
       redraw()
     end))
@@ -213,7 +214,7 @@ local function request(kind)
               and vim.fn.mode() == "n" then
             open_chat(root)
           else
-            notify("Review finished. Open the native chat with :SlimChatOpen")
+            notify("Review finished. Open the native chat with :TabinOpen")
           end
         elseif api.nvim_buf_is_loaded(buf) and tick == api.nvim_buf_get_changedtick(buf) then
           local shown, edit_error = ghost.show(buf, context, answer)
@@ -243,11 +244,11 @@ function M.status()
     return ""
   end
   local buf = status_buf()
-  local root = vim.b[buf].slimchat_root
+  local root = vim.b[buf].tabin_root
   if not root then
     return ""
   end
-  local provider = (active[root] and active[root].provider) or vim.b[buf].slimchat_provider or opts.provider
+  local provider = (active[root] and active[root].provider) or vim.b[buf].tabin_provider or opts.provider
   local function used(window)
     local value = usage[provider][window]
     return value and (not value.resets or value.resets > os.time()) and ("%g%%"):format(value.percent) or "–"
@@ -269,31 +270,31 @@ local function statusline()
     return base
   end
   local align = base:find("%=", 1, true) and "" or "%="
-  return base .. align .. "  %{v:lua.require'slimchat'.status()} "
+  return base .. align .. "  %{v:lua.require'tabin'.status()} "
 end
 
 M.statusline = statusline
 
 local function index_buffer(buf)
   local root = project.root(buf)
-  vim.b[buf].slimchat_root = root
+  vim.b[buf].tabin_root = root
   if root then
     local ok, link = pcall(project.read, root)
-    vim.b[buf].slimchat_provider = ok and link and link.provider or nil
+    vim.b[buf].tabin_provider = ok and link and link.provider or nil
   end
 end
 
 function M.setup(config)
   if opts then
-    error("Call slimchat.setup() only once", 0)
+    error("Call tabin.setup() only once", 0)
   end
   local settings = vim.tbl_deep_extend("force", vim.deepcopy(defaults), config or {})
-  assert(settings.provider == "codex" or settings.provider == "claude", "Invalid SlimChat provider")
-  assert(vim.islist(settings.spinner) and #settings.spinner > 0, "SlimChat needs at least one spinner frame")
+  assert(settings.provider == "codex" or settings.provider == "claude", "Invalid Tabin provider")
+  assert(vim.islist(settings.spinner) and #settings.spinner > 0, "Tabin needs at least one spinner frame")
   opts = settings
-  local group = api.nvim_create_augroup("SlimChat", { clear = true })
-  api.nvim_set_hl(0, "SlimChatGhost", { default = true, link = "Comment" })
-  api.nvim_set_hl(0, "SlimChatDelete", { default = true, strikethrough = true })
+  local group = api.nvim_create_augroup("Tabin", { clear = true })
+  api.nvim_set_hl(0, "TabinGhost", { default = true, link = "Comment" })
+  api.nvim_set_hl(0, "TabinDelete", { default = true, strikethrough = true })
   api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP", "InsertLeave" }, {
     group = group,
     callback = function(event) ghost.refresh(event.buf) end,
@@ -326,10 +327,10 @@ function M.setup(config)
     review = function() request("review") end,
   }) do
     if opts.keys[action] then
-      vim.keymap.set({ "n", "i" }, opts.keys[action], guarded(callback), { desc = "SlimChat " .. action })
+      vim.keymap.set({ "n", "i" }, opts.keys[action], guarded(callback), { desc = "Tabin " .. action })
     end
   end
-  api.nvim_create_user_command("SlimChatLogin", guarded(function(command)
+  api.nvim_create_user_command("TabinLogin", guarded(function(command)
     local root = project.root(api.nvim_get_current_buf())
     local link = root and project.read(root)
     local provider = command.args ~= "" and command.args or (link and link.provider or opts.provider)
@@ -340,9 +341,9 @@ function M.setup(config)
       last_usage = nil
     end)
   end), { nargs = "?", complete = function() return { "codex", "claude" } end })
-  api.nvim_create_user_command("SlimChatLink", guarded(function(command)
+  api.nvim_create_user_command("TabinLink", guarded(function(command)
     local provider, id = unpack(command.fargs)
-    assert(#command.fargs == 2 and project.valid(provider, id), "Use :SlimChatLink codex|claude SESSION_ID")
+    assert(#command.fargs == 2 and project.valid(provider, id), "Use :TabinLink codex|claude SESSION_ID")
     local buf = api.nvim_get_current_buf()
     local root = root_for(buf)
     local release = lock(root)
@@ -359,10 +360,10 @@ function M.setup(config)
     index_buffer(buf)
     refresh_usage(root, provider)
   end), { nargs = "+" })
-  api.nvim_create_user_command("SlimChatOpen", guarded(function()
+  api.nvim_create_user_command("TabinOpen", guarded(function()
     open_chat(root_for(api.nvim_get_current_buf()))
   end), {})
-  api.nvim_create_user_command("SlimChatUsage", guarded(function()
+  api.nvim_create_user_command("TabinUsage", guarded(function()
     visit(api.nvim_get_current_buf(), true)
   end), {})
   for _, buf in ipairs(api.nvim_list_bufs()) do
@@ -372,7 +373,7 @@ function M.setup(config)
   end
   if opts.statusline then
     original_statusline = vim.go.statusline
-    vim.go.statusline = "%!v:lua.require'slimchat'.statusline()"
+    vim.go.statusline = "%!v:lua.require'tabin'.statusline()"
   end
   visit(api.nvim_get_current_buf())
 end

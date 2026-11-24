@@ -1,4 +1,4 @@
-# slimchat.nvim
+# tabin.nvim
 
 Inline suggestions and native code reviews in one Codex or Claude Code chat per Git worktree. The plugin needs Neovim 0.12, Git, and a current Codex or Claude Code command-line client.
 
@@ -7,9 +7,9 @@ Inline suggestions and native code reviews in one Codex or Claude Code chat per 
 Add this to your Neovim configuration. The local Git source works with Neovim's built-in package manager.
 
 ```lua
-vim.pack.add({ "file://" .. vim.fn.expand("~/Development/projects/slimchat.nvim") })
+vim.pack.add({ "file://" .. vim.fn.expand("~/Development/projects/tabin.nvim") })
 
-require("slimchat").setup({
+require("tabin").setup({
   provider = "codex", -- or "claude" for Claude Code
   auth = {
     codex = {}, -- for example { "--device-auth" }
@@ -30,7 +30,7 @@ require("slimchat").setup({
 })
 ```
 
-Run `:SlimChatLogin` to sign in through the chosen client, or `:SlimChatLogin claude` to sign in to a specific provider. The plugin reuses the client's existing login. Set `command.codex` or `command.claude` to override the executable, and `env.codex` or `env.claude` to pass environment overrides from your Neovim configuration.
+Run `:TabinLogin` to sign in through the chosen client, or `:TabinLogin claude` to sign in to a specific provider. The plugin reuses the client's existing login. Set `command.codex` or `command.claude` to override the executable, and `env.codex` or `env.claude` to pass environment overrides from your Neovim configuration.
 
 ## Use
 
@@ -43,11 +43,11 @@ Run `:SlimChatLogin` to sign in through the chosen client, or `:SlimChatLogin cl
 
 Ghost text stays when you leave insert mode. Typing a matching prefix consumes that part of the ghost text, and a conflicting change at the suggestion clears it. Each change is accepted independently.
 
-The first turn creates a native chat. The worktree's `.slimchat` contains one line, such as `codex:SESSION_ID` or `claude:SESSION_ID`. The plugin uses Git's local exclude file. To use an existing chat, run `:SlimChatLink codex SESSION_ID` or `:SlimChatLink claude SESSION_ID` before the first turn. The link determines which provider a worktree uses.
+The first turn creates a native chat. The worktree's `.tabin` contains one line, such as `codex:SESSION_ID` or `claude:SESSION_ID`. The plugin uses Git's local exclude file. To use an existing chat, run `:TabinLink codex SESSION_ID` or `:TabinLink claude SESSION_ID` before the first turn. The link determines which provider a worktree uses. Existing `.slimchat` pointers still work.
 
-`:SlimChatOpen` opens that chat in the native client in a Neovim terminal tab. Exit the native client before starting another plugin turn in that worktree. Reviews open the native chat when they finish if you are still in the same worktree in normal mode. Set `open_on_review = false` to open it on demand.
+`:TabinOpen` opens that chat in the native client in a Neovim terminal tab. Exit the native client before starting another plugin turn in that worktree. Reviews open the native chat when they finish if you are still in the same worktree in normal mode. Set `open_on_review = false` to open it on demand.
 
-The bottom-right status line animates while a turn runs and shows the used percentages for the five-hour and weekly windows. A dash means the client hasn't supplied a current value. Codex refreshes on project entry or focus, at most once every five minutes. `:SlimChatUsage` requests an immediate refresh. Claude Code supplies percentages during turns on versions and accounts that expose them. For a custom status line, set `statusline = false` and add `require("slimchat").status` as a component.
+The bottom-right status line uses [Avante’s generating spinner](https://github.com/avante-corp/avante.nvim/blob/main/lua/avante/config.lua) while a turn runs and shows the used percentages for the five-hour and weekly windows. A dash means the client hasn't supplied a current value. Codex refreshes on project entry or focus, at most once every five minutes. `:TabinUsage` requests an immediate refresh. Claude Code supplies percentages during turns on versions and accounts that expose them. For a custom status line, set `statusline = false` and add `require("tabin").status` as a component.
 
 Alt+R uses [Codex's inline reviewer](https://learn.chatgpt.com/docs/app-server#review) or [Claude Code's bundled `/code-review` skill](https://code.claude.com/docs/en/skills). Put the desired review scope and format in `prompts.review`. Codex reviews can run tests with the default `codex.review_sandbox = "workspace-write"`. Claude Code uses the client's permissions. Set `claude.review_args` to pass additional arguments such as `{ "--allowedTools", "Bash(npm test)" }` in projects where that is appropriate.
 
