@@ -1,5 +1,9 @@
 local M = {}
 
+local function chat_name(root)
+  return vim.fs.basename(root) .. " - completions"
+end
+
 local function decode(line)
   local ok, value = pcall(vim.json.decode, line)
   if ok and type(value) == "table" then
@@ -34,9 +38,9 @@ local function codex(root, opts, timeout, ready, event, done)
       finish("Lost connection to Codex")
     end
   end
-  local function request(method, params, callback)
+  local function request(method, params, callback, on_error)
     id = id + 1
-    pending[id] = callback
+    pending[id] = { callback = callback, on_error = on_error }
     send({ id = id, method = method, params = params })
   end
   local function message(line)
@@ -47,12 +51,13 @@ local function codex(root, opts, timeout, ready, event, done)
     if msg.id and msg.method then
       send({ id = msg.id, error = { code = -32601, message = "No interactive response available" } })
     elseif msg.id and pending[msg.id] then
-      local callback = pending[msg.id]
+      local handler = pending[msg.id]
       pending[msg.id] = nil
       if msg.error then
-        finish(msg.error.message or "Codex request failed")
+        local on_error = handler.on_error or finish
+        on_error(msg.error.message or "Codex request failed")
       else
-        callback(msg.result)
+        handler.callback(msg.result)
       end
     elseif msg.method then
       event(msg.method, msg.params or {}, finish)
@@ -142,10 +147,21 @@ local function codex_turn(root, link, kind, prompt, schema, opts, report, rememb
         input = { input = { { type = "text", text = prompt } }, outputSchema = schema }
       end
       input.threadId = thread
-      request(method, input, function(response)
-        turn = response.turn.id
-        remember(thread)
-      end)
+      local function start_turn()
+        request(method, input, function(response)
+          turn = response.turn.id
+          remember(thread)
+        end)
+      end
+      local name = chat_name(root)
+      if result.thread.name == name then
+        start_turn()
+      else
+        request("thread/name/set", { threadId = thread, name = name }, start_turn, function(err)
+          vim.notify("Could not name Codex chat: " .. err, vim.log.levels.WARN, { title = "Tabin" })
+          start_turn()
+        end)
+      end
     end)
   end, function(method, params, finish)
     if method == "account/rateLimits/updated" then
@@ -192,7 +208,7 @@ local function claude_usage(info, report)
 end
 
 local function claude_turn(root, link, kind, prompt, schema, opts, report, remember, done)
-  local args = { opts.command.claude, "-p", "--output-format", "stream-json", "--verbose" }
+  local args = { opts.command.claude, "-p", "--output-format", "stream-json", "--verbose", "--name", chat_name(root) }
   if link then
     vim.list_extend(args, { "--resume", link.id })
   end

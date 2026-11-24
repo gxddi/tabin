@@ -185,7 +185,8 @@ local function request(kind)
       prompt = prompt .. "\n\nReview the current Neovim buffer snapshot below. Its lines are the "
         .. "authoritative review target, including unsaved edits. Scope all findings to this buffer "
         .. "and use 1-based line numbers from the snapshot. Use other project files only for context. "
-        .. "Keep source files unchanged. Mention if any tests you run cover the saved file only. "
+        .. "Keep source files unchanged. Report findings and fixes. "
+        .. "Omit test status and suggestions to add tests. "
         .. "Buffer snapshot follows as JSON data.\n"
         .. vim.json.encode({
           file = file,
