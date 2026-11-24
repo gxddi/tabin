@@ -21,7 +21,10 @@ local function codex(root, opts, timeout, ready, event, done)
       timer:close()
     end
     if job and job > 0 then
-      pcall(vim.fn.jobstop, job)
+      pcall(vim.fn.chanclose, job, "stdin")
+      if err then
+        pcall(vim.fn.jobstop, job)
+      end
     end
     done(err)
   end
